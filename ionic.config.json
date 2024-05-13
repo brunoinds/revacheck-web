@@ -1,0 +1,7 @@
+{
+  "name": "Revacheck",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}
