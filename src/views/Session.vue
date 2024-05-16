@@ -381,9 +381,11 @@ const actions = {
           files: [] 
         });
 
-        const fileOnStorage = storage.data.files.find((file:any) => {
-          return file.name == dynamicData.value.pdf.fileName;
+
+        const fileOnStorage = storage.data.files.find((filer:any) => {
+          return filer.name == file.name;
         })
+
 
         if (fileOnStorage) {
           dynamicData.value.texts.actorIndications = fileOnStorage.pageIndexesTexts.actorIndications;
@@ -433,8 +435,6 @@ const actions = {
         })
 
         storage.save();
-
-
       }
 
 
@@ -493,25 +493,6 @@ const actions = {
         data: getStationData()
       })
 
-
-      const storage = await TStorage.load('StationFile', {
-        files: [] 
-      });
-
-      storage.data.files = storage.data.files.filter((file:any) => {
-        return file.name != dynamicData.value.pdf.fileName;
-      })
-      storage.data.files.push({
-        name: dynamicData.value.pdf.fileName,
-        pageIndexesTexts: {
-          actorIndications: dynamicData.value.texts.actorIndications,
-          doctorIndications: dynamicData.value.texts.doctorIndications,
-          pressings: dynamicData.value.texts.pressings,
-          checklist: dynamicData.value.texts.checklist
-        }
-      })
-
-      storage.save();
     }else{
       actions.startCronometer();
     }
@@ -564,7 +545,7 @@ const actions = {
 
 
 
-const startStation = () => {
+const startStation = async () => {
   const extractPagesFromString = (text:string) => {
     //Rules:
 
@@ -602,6 +583,26 @@ const startStation = () => {
       points: []
     }
   })
+
+
+  const storage = await TStorage.load('StationFile', {
+      files: [] 
+    });
+
+    storage.data.files = storage.data.files.filter((file:any) => {
+      return file.name != dynamicData.value.pdf.fileName;
+    })
+    storage.data.files.push({
+      name: dynamicData.value.pdf.fileName,
+      pageIndexesTexts: {
+        actorIndications: dynamicData.value.texts.actorIndications,
+        doctorIndications: dynamicData.value.texts.doctorIndications,
+        pressings: dynamicData.value.texts.pressings,
+        checklist: dynamicData.value.texts.checklist
+      }
+    })
+
+    storage.save();
 }
 
 const clickOnChecklistPage = (ev: MouseEvent, index: number) => {
