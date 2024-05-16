@@ -295,10 +295,10 @@ const dynamicData = ref<{
   },
   role: role,
   texts: {
-    actorIndications: '3,4',
-    doctorIndications: '2',
-    pressings: '8,9,10,11,12,13,14,15,16,17,18,19,20,21',
-    checklist: '5,6,7',
+    actorIndications: '2,3,4',
+    doctorIndications: '1',
+    pressings: '8,9,10',
+    checklist: '5,6',
   },
   checklist: {
     pages: {}
