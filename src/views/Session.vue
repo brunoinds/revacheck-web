@@ -13,7 +13,7 @@
             Terminar estação
           </ion-button>
 
-          <ion-button @click="actions.goToNewStation" color="danger" v-if="dynamicData.stage == 'finished-station'">
+          <ion-button @click="actions.goToNewStation" color="success" v-if="dynamicData.stage == 'finished-station'">
             <ion-icon slot="end" :icon="reloadOutline"></ion-icon>
             Nova estação
           </ion-button>
