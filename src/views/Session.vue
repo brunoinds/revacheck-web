@@ -235,9 +235,10 @@ import { FilePicker } from '@capawesome/capacitor-file-picker';
 
 import { VuePdf, createLoadingTask } from 'vue3-pdfjs/esm';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { medicalOutline, checkmarkDoneOutline, reloadOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
+import { TStorage } from '@/utils/TStorage';
 
 
 const route = useRoute();
@@ -375,6 +376,21 @@ const actions = {
         })
         dynamicData.value.stage = 'waiting-start';
         dynamicData.value.tab = 'waiting-start';
+      }else{
+        const storage = await TStorage.load('StationFile', {
+          files: [] 
+        });
+
+        const fileOnStorage = storage.data.files.find((file:any) => {
+          return file.name == dynamicData.value.pdf.fileName;
+        })
+
+        if (fileOnStorage) {
+          dynamicData.value.texts.actorIndications = fileOnStorage.pageIndexesTexts.actorIndications;
+          dynamicData.value.texts.doctorIndications = fileOnStorage.pageIndexesTexts.doctorIndications;
+          dynamicData.value.texts.pressings = fileOnStorage.pageIndexesTexts.pressings;
+          dynamicData.value.texts.checklist = fileOnStorage.pageIndexesTexts.checklist;
+        }
       }
       
 
@@ -397,6 +413,28 @@ const actions = {
         const pdf = await PDFModifier.loadPDF(dynamicData.value.pdf.blobUri);
         const imagesBase64 = await pdf.extractPagesAsImagesAsBase64(pagesToBeIncludedUnique);
         dynamicData.value.pdf.pagesAsImages = imagesBase64;
+
+
+        const storage = await TStorage.load('StationFile', {
+          files: [] 
+        });
+
+        storage.data.files = storage.data.files.filter((file:any) => {
+          return file.name != dynamicData.value.pdf.fileName;
+        })
+        storage.data.files.push({
+          name: dynamicData.value.pdf.fileName,
+          pageIndexesTexts: {
+            actorIndications: dynamicData.value.texts.actorIndications,
+            doctorIndications: dynamicData.value.texts.doctorIndications,
+            pressings: dynamicData.value.texts.pressings,
+            checklist: dynamicData.value.texts.checklist
+          }
+        })
+
+        storage.save();
+
+
       }
 
 
@@ -454,6 +492,26 @@ const actions = {
         type: 'public-on-station-start',
         data: getStationData()
       })
+
+
+      const storage = await TStorage.load('StationFile', {
+        files: [] 
+      });
+
+      storage.data.files = storage.data.files.filter((file:any) => {
+        return file.name != dynamicData.value.pdf.fileName;
+      })
+      storage.data.files.push({
+        name: dynamicData.value.pdf.fileName,
+        pageIndexesTexts: {
+          actorIndications: dynamicData.value.texts.actorIndications,
+          doctorIndications: dynamicData.value.texts.doctorIndications,
+          pressings: dynamicData.value.texts.pressings,
+          checklist: dynamicData.value.texts.checklist
+        }
+      })
+
+      storage.save();
     }else{
       actions.startCronometer();
     }
@@ -740,7 +798,9 @@ const wsEvents = {
     
   }
 }
-
+onUnmounted(() => {
+  ws.close();
+})
 </script>
 
 
