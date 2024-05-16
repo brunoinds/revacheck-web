@@ -13,6 +13,11 @@
             Terminar estação
           </ion-button>
 
+          <ion-button @click="actions.goToNewStation" color="danger" v-if="dynamicData.stage == 'finished-station'">
+            <ion-icon slot="end" :icon="reloadOutline"></ion-icon>
+            Nova estação
+          </ion-button>
+
           <ion-button @click="actions.startStation" color="success" v-if="dynamicData.stage == 'waiting-start' && dynamicData.role == 'actor'">
             <ion-icon slot="end" :icon="playOutline"></ion-icon>
             Iniciar estação
@@ -231,11 +236,12 @@ import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { VuePdf, createLoadingTask } from 'vue3-pdfjs/esm';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import { computed, onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
-import { medicalOutline, checkmarkDoneOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
+import { useRoute, useRouter } from 'vue-router';
+import { medicalOutline, checkmarkDoneOutline, reloadOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
 
 
 const route = useRoute();
+const router = useRouter()
 
 const role = route.query.role as 'actor' | 'doctor' || 'actor';
 const connectionId = route.params.connectionId as string ;
@@ -342,6 +348,9 @@ const isLoadingUI = computed(() => {
 })
 
 const actions = {
+  goToNewStation: () => {
+    router.replace(`/sessions`);
+  },
   choosePdf: async () => {
     const openPdfPicker = async () => {
       const result = await FilePicker.pickFiles({
@@ -623,7 +632,15 @@ const updateStationData = (data: any) => {
 }
 
 
-const ws = new WebSocket('ws://localhost:3000/');
+const websocketUrl = (() => {
+  if (window.location.protocol == 'https:') {
+    return 'wss://' + window.location.host + '/' + window.location.pathname.split('/')[1] + '/';
+  }else{
+    return 'ws://localhost:3000/';
+  }
+})();
+
+const ws = new WebSocket(websocketUrl);
 ws.onopen = () => {
   ws.send(JSON.stringify({
     type: 'register',

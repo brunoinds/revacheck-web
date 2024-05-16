@@ -7,7 +7,7 @@ import Sessions from '@/views/Sessions.vue';
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    redirect: '/tabs/tab1'
+    redirect: '/sessions'
   },
   {
     path: '/sessions/:connectionId',
@@ -16,16 +16,6 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/sessions',
     component: Sessions
-  },
-  {
-    path: '/tabs/',
-    component: TabsPage,
-    children: [
-      {
-        path: '',
-        redirect: '/tabs/tab1'
-      }
-    ]
   }
 ]
 
