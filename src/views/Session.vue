@@ -349,7 +349,7 @@ const isLoadingUI = computed(() => {
 
 const actions = {
   goToNewStation: () => {
-    window.document.location.href = '/sessions';
+    window.document.location.href = '/app/sessions';
   },
   choosePdf: async () => {
     const openPdfPicker = async () => {
