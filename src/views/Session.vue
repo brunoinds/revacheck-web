@@ -187,12 +187,9 @@
               <ion-list v-if="dynamicData.role == 'actor' || (dynamicData.role == 'doctor' && dynamicData.pageIndexes.allowedPressings.length > 0)">
                 <ion-item button v-if="dynamicData.role == 'actor'" v-for="index in dynamicData.pageIndexes.pressings" @click="() => viewsDynamicData.indications.currentPage = index">
                   <ion-img width="100" :src="dynamicData.pdf.pagesAsImages[index]"></ion-img>
-                  <ion-button color="secondary" slot="end" v-if="!dynamicData.pageIndexes.allowedPressings.includes(index)" @click="(ev) => actions.allowPressing(ev, index)">
-                    <ion-icon :icon="sendOutline"></ion-icon>
-                  </ion-button>
-
-                  <ion-button color="success" slot="end" v-if="dynamicData.pageIndexes.allowedPressings.includes(index)" :readonly="true">
-                    <ion-icon :icon="checkmarkDoneOutline"></ion-icon>
+                  <ion-button :color="!dynamicData.pageIndexes.allowedPressings.includes(index) ? 'secondary' : 'success'" slot="end"  @click="(ev) => actions.allowPressing(ev, index)">
+                    <ion-icon v-if="!dynamicData.pageIndexes.allowedPressings.includes(index)" :icon="sendOutline"></ion-icon>
+                    <ion-icon v-if="dynamicData.pageIndexes.allowedPressings.includes(index)" :icon="checkmarkDoneOutline"></ion-icon>
                   </ion-button>
                 </ion-item>
 
@@ -214,14 +211,36 @@
 
 
           <section class="section-with-sidebar-gallery" v-show="dynamicData.tab == 'checklist'" v-if="(dynamicData.stage == 'finished-station' && dynamicData.role == 'doctor') || (dynamicData.role == 'actor')" style="position: absolute; top: 48px; bottom: 0px; left: 0px; right: 0px; display: flex; align-items: flex-start; overflow: scroll;">
-            <main style="display: flex; flex-direction: column; row-gap: 10px;">
+            <main style="display: flex;flex-direction: column;row-gap: 10px;position: absolute; width: unset; top: 0px;left: 0px;bottom: 0px;right: 200px;overflow: scroll;justify-content: flex-start;">
               <article style="max-width: 500px;" class="checklist-page" v-for="index in dynamicData.pageIndexes.checklist">
                 <section @click="(ev) => {clickOnChecklistPage(ev, index)}">
                   <img :src="dynamicData.pdf.pagesAsImages[index]"></img>
                 </section>
-                <ion-button size="small" class="checklist-button" @click="(ev) => {clickOnButtonOnChecklistPage(ev, index, point)}" v-for="point in dynamicData.checklist.pages[index].points" :style="'top:' + point.y + 'px; left: ' + point.x + 'px;'">🆇</ion-button>
+                <ion-button size="small" class="checklist-button" @click="(ev) => {clickOnButtonOnChecklistPage(ev, index, point)}" v-for="point in dynamicData.checklist.pages[index].points" :style="'top:' + point.y + 'px; left: ' + point.x + 'px;'">
+                  <ion-icon :icon="checkmarkOutline"></ion-icon>
+                </ion-button>
               </article>
             </main>
+            <aside style="position: absolute; top: 0; right: 0; bottom: 0; width: 170px;">
+              <article>
+                <header style="text-align: center">
+                  <h1 style="font-size: 15px">Pontuação</h1>
+                  <h2 style="font-size: 32px; margin-bottom: 18px;">{{ dynamicData.checklist.pontuation }}</h2>
+                </header>
+                <main style="display: ruby;" v-if="dynamicData.role == 'actor'">
+                  <ion-button color="dark" @click="actions.addPontuation(0.25)">+0.25</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(0.50)">+0.50</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(0.75)">+0.75</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(1)">+1.00</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(1.5)">+1.50</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(2)">+2.00</ion-button>
+                </main>
+                <footer style="display: flex;align-items: center;justify-content: center;"  v-if="dynamicData.role == 'actor'">
+                  <ion-button color="dark" style="width: 145px;" @click="actions.removePontuation()">Desfazer</ion-button>
+                </footer>
+              </article>
+
+            </aside>
           </section>
         </main>
       </section>
@@ -237,15 +256,18 @@ import { VuePdf, createLoadingTask } from 'vue3-pdfjs/esm';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { medicalOutline, checkmarkDoneOutline, reloadOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
+import { medicalOutline, checkmarkDoneOutline, reloadOutline, checkmarkOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
 import { TStorage } from '@/utils/TStorage';
 
 
 const route = useRoute();
-const router = useRouter()
+const router = useRouter();
 
 const role = route.query.role as 'actor' | 'doctor' || 'actor';
 const connectionId = route.params.connectionId as string ;
+
+
+const lastPontuationSum:Array<number> = [0];
 
 
 //Stages: prepare-station, waiting-doctor, waiting-start, ongoing-station, finished-station
@@ -275,6 +297,7 @@ const dynamicData = ref<{
     checklist: string;
   };
   checklist: {
+    pontuation: number,
     pages: {}
   }
 }>({
@@ -302,6 +325,7 @@ const dynamicData = ref<{
     checklist: '5,6',
   },
   checklist: {
+    pontuation: 0,
     pages: {}
   }
 })
@@ -472,7 +496,9 @@ const actions = {
     dynamicData.value.tab = 'waiting-doctor';
   },
   allowPressing: async (ev: MouseEvent, index: number) => {
-    dynamicData.value.pageIndexes.allowedPressings.push(index);
+    if (!dynamicData.value.pageIndexes.allowedPressings.includes(index)) {
+      dynamicData.value.pageIndexes.allowedPressings.push(index);
+    }
     sendStationData('allow-pressing');
   },
   onDoctorArrived: async () => {
@@ -539,6 +565,17 @@ const actions = {
     }
 
     actions.stopCronometer();
+  },
+  addPontuation: async (points: number) => {
+    dynamicData.value.checklist.pontuation += points;
+    lastPontuationSum.push(points);
+    sendStationData('add-pontuation');
+  },
+  removePontuation: async () => {
+    if (lastPontuationSum.length > 0) {
+      dynamicData.value.checklist.pontuation -= lastPontuationSum.pop();
+      sendStationData('remove-pontuation');
+    }
   }
 }
 
