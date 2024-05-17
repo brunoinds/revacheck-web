@@ -439,26 +439,6 @@ const actions = {
         const pdf = await PDFModifier.loadPDF(dynamicData.value.pdf.blobUri);
         const imagesBase64 = await pdf.extractPagesAsImagesAsBase64(pagesToBeIncludedUnique);
         dynamicData.value.pdf.pagesAsImages = imagesBase64;
-
-
-        const storage = await TStorage.load('StationFile', {
-          files: [] 
-        });
-
-        storage.data.files = storage.data.files.filter((file:any) => {
-          return file.name != dynamicData.value.pdf.fileName;
-        })
-        storage.data.files.push({
-          name: dynamicData.value.pdf.fileName,
-          pageIndexesTexts: {
-            actorIndications: dynamicData.value.texts.actorIndications,
-            doctorIndications: dynamicData.value.texts.doctorIndications,
-            pressings: dynamicData.value.texts.pressings,
-            checklist: dynamicData.value.texts.checklist
-          }
-        })
-
-        storage.save();
       }
 
 
