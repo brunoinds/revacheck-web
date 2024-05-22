@@ -3,6 +3,8 @@ import { RouteRecordRaw } from 'vue-router';
 import TabsPage from '../views/TabsPage.vue'
 import Session from '@/views/Session.vue';
 import Sessions from '@/views/Sessions.vue';
+import Login from '@/views/Login.vue';
+import Explorer from '@/views/Explorer.vue';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -16,6 +18,14 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/sessions',
     component: Sessions
+  },
+  {
+    path: '/explorer',
+    component: Explorer
+  },
+  {
+    path: '/login',
+    component: Login
   }
 ]
 

@@ -26,6 +26,8 @@
 </template>
 
 <script setup lang="ts">
+import { Dialog } from '@/utils/Dialog';
+import Explorer from '@/views/Explorer.vue';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonButton, IonIcon, IonLabel, alertController } from '@ionic/vue';
 import { medicalOutline, checkmarkDoneOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
@@ -68,8 +70,7 @@ const actions = {
   chooseActor: () => {
     //Generate random 8 numeric digits:
     const roomCode = Math.floor(10000000 + Math.random() * 90000000);
-    
-    router.push(`/sessions/${roomCode}`)
+    router.push(`/sessions/${roomCode}`);
   }
 }
 </script>

@@ -43,24 +43,34 @@
         </header>
         <main>
           <section v-show="dynamicData.tab == 'prepare'" v-if="!dynamicData.pdf.blobUri" style="height: 100%; display: flex; align-items: center; justify-content: center;">
-            <article style="display: flex; flex-direction: column; align-items: center; text-align: center;" v-if="dynamicData.role == 'actor'">
+            <article style="display: flex; flex-direction: column; align-items: center; text-align: center;" v-if="dynamicData.role == 'actor' && !loadingPdfFileOnline">
               <header>
                 <ion-label style="font-size: 55px;">
                   <ion-icon color="danger" :icon="medicalOutline"></ion-icon>
                 </ion-label>
                 <h1>Nova estação</h1>
-                <p>Para começar, selecione o arquivo PDF que contém as instruções da estação</p>
+                <p>Para começar, selecione um caso clínico que contém as instruções da estação</p>
               </header>
               
 
               <main>
-                <ion-button expand="block" @click="actions.choosePdf">Selecionar arquivo PDF</ion-button>
+                <ion-button expand="block" @click="actions.choosePdf">Selecionar Caso Clínico</ion-button>
               </main>
+            </article>
+
+            <article style="display: flex; flex-direction: column; align-items: center; text-align: center;" v-if="dynamicData.role == 'actor' && loadingPdfFileOnline">
+              <header>
+                <ion-label style="font-size: 55px;">
+                  <ion-icon color="warning" :icon="cloudDownloadOutline"></ion-icon>
+                </ion-label>
+                <h1>Baixando materiais da estação...</h1>
+                <p>Aguarde enquanto fazemos o download dos materiais necessários para poder começar a estação</p>
+              </header>
             </article>
 
 
             <article style="display: flex; flex-direction: column; align-items: center; text-align: center;" v-if="dynamicData.role == 'doctor' && dynamicData.pdf.fileName != null">
-              <header>
+              <!--<header>
                 <ion-label style="font-size: 55px;">
                   <ion-icon color="success" :icon="cloudUploadOutline"></ion-icon>
                 </ion-label>
@@ -73,7 +83,15 @@
               <br>
               <main>
                 <ion-button expand="block" @click="actions.choosePdf">Selecionar arquivo PDF</ion-button>
-              </main>
+              </main>-->
+
+              <header>
+                <ion-label style="font-size: 55px;">
+                  <ion-icon color="warning" :icon="cloudDownloadOutline"></ion-icon>
+                </ion-label>
+                <h1>Baixando materiais da estação...</h1>
+                <p>Aguarde enquanto fazemos o download dos materiais necessários para poder começar a estação</p>
+              </header>
             </article>
 
 
@@ -256,8 +274,11 @@ import { VuePdf, createLoadingTask } from 'vue3-pdfjs/esm';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { medicalOutline, checkmarkDoneOutline, reloadOutline, checkmarkOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
+import { medicalOutline, checkmarkDoneOutline, reloadOutline,cloudDownloadOutline, checkmarkOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
 import { TStorage } from '@/utils/TStorage';
+import { websocketUrl } from '@/utils/Api';
+import { Dialog } from '@/utils/Dialog';
+import Explorer from '@/views/Explorer.vue';
 
 
 const route = useRoute();
@@ -288,6 +309,7 @@ const dynamicData = ref<{
     blobUri: string | null;
     pagesAsImages: string[];
     fileName: string | null;
+    fileUrl: string | null;
   };
   role: 'actor' | 'doctor';
   texts: {
@@ -315,7 +337,8 @@ const dynamicData = ref<{
     base64: null,
     blobUri: null,
     pagesAsImages: [],
-    fileName: null
+    fileName: null,
+    fileUrl: null
   },
   role: role,
   texts: {
@@ -353,6 +376,10 @@ const cronometerUI = computed(() => {
 })
 
 const isLoadingPdfAndImages = ref<boolean>(false);
+const loadingPdfFileOnline = ref<{
+  percentage: number,
+  text: string
+}|null>(null);
 const isLoadingUI = computed(() => {
   if (isLoadingPdfAndImages.value) {
     return true;
@@ -425,7 +452,8 @@ const actions = {
       const url = URL.createObjectURL(file.blob as Blob);
       const sourcePDF = url;
 
-      dynamicData.value.pdf.blobUri = sourcePDF;
+      dynamicData.value.pdf.blobUri = sourcePDF
+
 
 
       if (dynamicData.value.role == 'doctor'){
@@ -444,7 +472,128 @@ const actions = {
 
       isLoadingPdfAndImages.value = false;
     };
-    await openPdfPicker();
+
+    const openOnlinePdfPicker = async () => {
+      let result;
+      if (dynamicData.value.role == 'actor') {
+        const response = await (async () => {
+          return new Promise((resolve, reject) => {
+            Dialog.show(Explorer, {
+              props: {},
+              onLoaded($this) {
+                $this.on('selected', (event: any) => {
+                  resolve(event.data);
+                });
+              },
+            });
+          });
+        })() as any;
+
+        result = {
+          name: response.id,
+          url: response.downloadUrl
+        } as any
+      }else{
+        result = {
+          name: dynamicData.value.pdf.fileName,
+          url: dynamicData.value.pdf.fileUrl
+        }
+      }
+
+
+      const storage = await TStorage.load('Revacheck/RemoteFiles', {
+          files: [] 
+      });
+
+      const storedFile = storage.data.files.find((file:any) => {
+        return file.name == result.name;
+      })
+      
+      isLoadingPdfAndImages.value = true;
+
+      const file = result;
+
+      loadingPdfFileOnline.value = {
+        percentage: 0,
+        text: 'Baixando arquivo PDF...'
+      };
+
+
+      let fetchedOnline;
+      let url;
+
+      if (storedFile){
+        fetchedOnline = await fetch(storedFile.base64Url);
+        url = URL.createObjectURL((await fetchedOnline.blob()) as Blob)
+      }else{
+        fetchedOnline = await fetch(file.url);
+
+        const blob = await fetchedOnline.blob();
+        url = URL.createObjectURL(blob as Blob)
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          storage.data.files.push({
+            name: file.name,
+            url: file.url,
+            base64Url: reader.result
+          })
+          storage.save();
+        }
+      }
+
+      loadingPdfFileOnline.value = null;
+
+      dynamicData.value.pdf.fileName = file.name;
+      dynamicData.value.pdf.fileUrl = file.url;
+
+
+      if (dynamicData.value.role == 'doctor') {
+        sendWS({
+          type: 'public-on-doctor-ready',
+          data: {}
+        })
+        dynamicData.value.stage = 'waiting-start';
+        dynamicData.value.tab = 'waiting-start';
+      }else{
+        const storage = await TStorage.load('StationFile', {
+          files: [] 
+        });
+
+
+        const fileOnStorage = storage.data.files.find((filer:any) => {
+          return filer.name == file.name;
+        })
+
+        if (fileOnStorage) {
+          dynamicData.value.texts.actorIndications = fileOnStorage.pageIndexesTexts.actorIndications;
+          dynamicData.value.texts.doctorIndications = fileOnStorage.pageIndexesTexts.doctorIndications;
+          dynamicData.value.texts.pressings = fileOnStorage.pageIndexesTexts.pressings;
+          dynamicData.value.texts.checklist = fileOnStorage.pageIndexesTexts.checklist;
+        }
+      }
+      
+
+
+      const sourcePDF = url;
+      dynamicData.value.pdf.blobUri = sourcePDF
+
+      if (dynamicData.value.role == 'doctor'){
+        const pagesToBeIncluded = [
+          ...dynamicData.value.pageIndexes.actorIndications,
+          ...dynamicData.value.pageIndexes.doctorIndications,
+          ...dynamicData.value.pageIndexes.pressings,
+          ...dynamicData.value.pageIndexes.checklist
+        ]
+        const pagesToBeIncludedUnique = Array.from(new Set(pagesToBeIncluded));
+        const pdf = await PDFModifier.loadPDF(dynamicData.value.pdf.blobUri);
+        const imagesBase64 = await pdf.extractPagesAsImagesAsBase64(pagesToBeIncludedUnique);
+        dynamicData.value.pdf.pagesAsImages = imagesBase64;
+      }
+
+      isLoadingPdfAndImages.value = false;
+    };
+    await openOnlinePdfPicker();
   },
   inviteDoctor: async () => {
     startStation();
@@ -483,6 +632,7 @@ const actions = {
   },
   onDoctorArrived: async () => {
     if (dynamicData.value.role == 'doctor') {
+      actions.choosePdf();
     }else{
       dynamicData.value.stage = 'waiting-doctor-ready';
       dynamicData.value.tab = 'waiting-doctor-ready';
@@ -696,7 +846,8 @@ const getStationData = () => {
     stage: dynamicData.value.stage,
     pageIndexes: dynamicData.value.pageIndexes,
     checklist: dynamicData.value.checklist,
-    pdfFileName: dynamicData.value.pdf.fileName
+    pdfFileName: dynamicData.value.pdf.fileName,
+    pdfFileUrl: dynamicData.value.pdf.fileUrl
   }
 }
 
@@ -705,16 +856,10 @@ const updateStationData = (data: any) => {
   dynamicData.value.pageIndexes = data.pageIndexes;
   dynamicData.value.checklist = data.checklist;
   dynamicData.value.pdf.fileName = data.pdfFileName;
+  dynamicData.value.pdf.fileUrl = data.pdfFileUrl;
 }
 
 
-const websocketUrl = (() => {
-  if (window.location.protocol == 'https:') {
-    return 'wss://' + window.location.host + '/' + window.location.pathname.split('/')[1] + '/';
-  }else{
-    return 'ws://localhost:3000/';
-  }
-})();
 
 const ws = new WebSocket(websocketUrl);
 ws.onopen = () => {
@@ -788,19 +933,15 @@ const wsEvents = {
   'public-on-station-data': (event: any) => {
     if (dynamicData.value.role == 'doctor'){
         if (event.data.from == 'actor' && event.data.stage == 'waiting-doctor') {
-        updateStationData(event.data);
-
-        actions.onDoctorArrived();
-        sendWS({
-          type: 'public-on-doctor-arrived',
-          data: getStationData()
-        })
+          updateStationData(event.data);
+          actions.onDoctorArrived();
+          sendWS({
+            type: 'public-on-doctor-arrived',
+            data: getStationData()
+          })
       }
 
       if (event.data.from == 'actor' && event.data.stage == 'ongoing-station') {
-        
-
-
         updateStationData(event.data);
 
         if (event.data.action == 'allow-pressing') {

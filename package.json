@@ -13,6 +13,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@billjs/event-emitter": "^1.0.3",
     "@capacitor/app": "6.0.0",
     "@capacitor/core": "6.0.0",
     "@capacitor/filesystem": "^6.0.0",
@@ -24,15 +25,19 @@
     "@ionic/vue": "^8.0.0",
     "@ionic/vue-router": "^8.0.0",
     "ionicons": "^7.0.0",
+    "lodash": "^4.17.21",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.2.67",
+    "pinia": "^2.1.7",
     "pusher-js": "^8.4.0-rc2",
+    "socket.io-client": "^4.7.5",
     "vue": "^3.3.0",
     "vue-router": "^4.2.0",
     "vue3-pdfjs": "^0.1.6"
   },
   "devDependencies": {
     "@capacitor/cli": "6.0.0",
+    "@types/lodash": "^4.17.4",
     "@vitejs/plugin-legacy": "^5.0.0",
     "@vitejs/plugin-vue": "^4.0.0",
     "@vue/eslint-config-typescript": "^12.0.0",
