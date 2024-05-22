@@ -246,7 +246,11 @@
                   <h2 style="font-size: 32px; margin-bottom: 18px;">{{ dynamicData.checklist.pontuation }}</h2>
                 </header>
                 <main style="display: ruby;" v-if="dynamicData.role == 'actor'">
+                  <ion-button color="dark" @click="actions.addPontuation(0.05)">+0.05</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(0.10)">+0.10</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(0.10)">+0.20</ion-button>
                   <ion-button color="dark" @click="actions.addPontuation(0.25)">+0.25</ion-button>
+                  <ion-button color="dark" @click="actions.addPontuation(0.30)">+0.30</ion-button>
                   <ion-button color="dark" @click="actions.addPontuation(0.50)">+0.50</ion-button>
                   <ion-button color="dark" @click="actions.addPontuation(0.75)">+0.75</ion-button>
                   <ion-button color="dark" @click="actions.addPontuation(1)">+1.00</ion-button>
