@@ -13,7 +13,7 @@ export const websocketUrl = (() => {
 
 export const apiEndpoint = (() => {
     if (window.location.protocol == 'https:') {
-        return 'https://' + window.location.host + '/' + window.location.pathname.split('/')[1] + '/api';
+        return 'https://revacheck-api.onrender.com/api';
     }else{
         return 'http://localhost:3000/api';
     }
