@@ -512,13 +512,8 @@ const actions = {
       }
 
 
-      const storage = await TStorage.load('Revacheck/RemoteFiles', {
-          files: [] 
-      });
 
-      const storedFile = storage.data.files.find((file:any) => {
-        return file.name == result.name;
-      })
+      const storedFile = null;
       
       isLoadingPdfAndImages.value = true;
 
@@ -541,16 +536,6 @@ const actions = {
 
         const blob = await fetchedOnline.blob();
         url = URL.createObjectURL(blob as Blob)
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => {
-          storage.data.files.push({
-            name: file.name,
-            url: file.url,
-            base64Url: reader.result
-          })
-          storage.save();
-        }
       }
 
       loadingPdfFileOnline.value = null;
