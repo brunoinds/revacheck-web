@@ -63,7 +63,7 @@
                 <ion-label style="font-size: 55px;">
                   <ion-icon color="warning" :icon="cloudDownloadOutline"></ion-icon>
                 </ion-label>
-                <h1>Baixando materiais da estação...</h1>
+                <h1>Baixando materiais da estação ({{ loadingPdfFileOnline.percentage.toFixed(2) }}%)...</h1>
                 <p>Aguarde enquanto fazemos o download dos materiais necessários para poder começar a estação</p>
               </header>
             </article>
@@ -89,7 +89,7 @@
                 <ion-label style="font-size: 55px;">
                   <ion-icon color="warning" :icon="cloudDownloadOutline"></ion-icon>
                 </ion-label>
-                <h1>Baixando materiais da estação...</h1>
+                <h1>Baixando materiais da estação ({{ (loadingPdfFileOnline) ? loadingPdfFileOnline.percentage.toFixed(2) : '0' }}%)...</h1>
                 <p>Aguarde enquanto fazemos o download dos materiais necessários para poder começar a estação</p>
               </header>
             </article>
@@ -283,7 +283,8 @@ import { TStorage } from '@/utils/TStorage';
 import { websocketUrl } from '@/utils/Api';
 import { Dialog } from '@/utils/Dialog';
 import Explorer from '@/views/Explorer.vue';
-
+import axios from 'axios';
+import { xor } from 'lodash';
 
 const route = useRoute();
 const router = useRouter();
@@ -521,7 +522,7 @@ const actions = {
 
       loadingPdfFileOnline.value = {
         percentage: 0,
-        text: 'Baixando arquivo PDF...'
+        text: 'Baixando materiais da estação...'
       };
 
 
@@ -532,9 +533,22 @@ const actions = {
         fetchedOnline = await fetch(storedFile.base64Url);
         url = URL.createObjectURL((await fetchedOnline.blob()) as Blob)
       }else{
-        fetchedOnline = await fetch(file.url);
+        const response = await axios.get(file.url, {
+          responseType: 'arraybuffer',
+          onDownloadProgress: (progressEvent) => {
+            if (!progressEvent.total){
+              return;
+            }
+            const percentage = ((progressEvent.loaded * 100) / progressEvent.total)
+            loadingPdfFileOnline.value = {
+              percentage: percentage,
+              text: `Baixando materiais da estação (${percentage}%)...`
+            };
+          }
+        })
 
-        const blob = await fetchedOnline.blob();
+        const blob = new Blob([response.data], {type: 'application/pdf'});
+
         url = URL.createObjectURL(blob as Blob)
       }
 
