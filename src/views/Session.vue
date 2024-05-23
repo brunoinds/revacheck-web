@@ -4,7 +4,7 @@
       <ion-toolbar>
         <ion-title>Estação #{{ dynamicData.connectionId }}</ion-title>
         <ion-buttons slot="end">
-          <ion-button color="warning" v-if="stationCronometer.interval">
+          <ion-button color="warning" v-if="dynamicData.cronometer.stopAt">
             <ion-icon slot="start" :icon="timeOutline"></ion-icon>
             {{ cronometerUI }}
           </ion-button>
@@ -276,7 +276,7 @@ import { FilePicker } from '@capawesome/capacitor-file-picker';
 
 import { VuePdf, createLoadingTask } from 'vue3-pdfjs/esm';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { medicalOutline, checkmarkDoneOutline, reloadOutline,cloudDownloadOutline, checkmarkOutline, arrowForwardOutline, radioOutline, codeWorkingOutline, shareOutline, peopleCircleOutline, cloudUploadOutline, closeOutline, playOutline, timeOutline, sendOutline } from 'ionicons/icons';
 import { TStorage } from '@/utils/TStorage';
@@ -325,7 +325,10 @@ const dynamicData = ref<{
   checklist: {
     pontuation: number,
     pages: {}
-  }
+  };
+  cronometer: {
+    stopAt: string|null
+  };
 }>({
   stage: 'prepare-station',
   connectionId: connectionId,
@@ -354,6 +357,9 @@ const dynamicData = ref<{
   checklist: {
     pontuation: 0,
     pages: {}
+  },
+  cronometer: {
+    stopAt: null
   }
 })
 
@@ -364,7 +370,7 @@ const viewsDynamicData = ref({
 })
 
 let stationCronometer = ref<{
-  interval: number | null,
+  interval: any | null,
   time: number
 }>({
   interval: null,
@@ -374,10 +380,11 @@ let stationCronometer = ref<{
 const cronometerUI = computed(() => {
   const minutes = Math.floor(stationCronometer.value.time / 60);
   const seconds = stationCronometer.value.time % 60;
-  //Add a zero before the seconds if it is less than 10:
   const secondsString = seconds < 10 ? '0' + seconds : seconds;
   return `${minutes}:${secondsString}`;
 })
+
+
 
 const isLoadingPdfAndImages = ref<boolean>(false);
 const loadingPdfFileOnline = ref<{
@@ -651,10 +658,8 @@ const actions = {
       sendWS({
         type: 'public-on-station-start',
         data: getStationData()
-      })
-
-    }else{
-      actions.startCronometer();
+      });
+      sendStationData();
     }
   },
   copyShareLink: async () => {
@@ -668,23 +673,19 @@ const actions = {
     }).then(toast => toast.present());
   },
   startCronometer: async () => {
-    stationCronometer.value.time = (10 * 60);
-    stationCronometer.value.interval = setInterval(() => {
-      stationCronometer.value.time -= 1;
-
-      if (stationCronometer.value.time <= 0) {
-        actions.finishStation();
-      }
-    }, 1000)
+    const stopAt = new Date();
+    stopAt.setSeconds(stopAt.getSeconds() + (10 * 60));
+    dynamicData.value.cronometer.stopAt = stopAt.toISOString();
   },
   stopCronometer: async () => {
-    clearInterval(stationCronometer.value.interval);
-    stationCronometer.value.interval = null;
-    stationCronometer.value.time = 0;
+    dynamicData.value.cronometer.stopAt = null;
   },
   finishStation: async () => {
+    actions.stopCronometer();
+
     dynamicData.value.stage = 'finished-station';
     dynamicData.value.tab = 'checklist';
+    dynamicData.value.cronometer.stopAt = null;
     if (dynamicData.value.role == 'doctor'){
       alertController.create({
         header: 'Estação finalizada!',
@@ -697,8 +698,6 @@ const actions = {
         data: {}
       })
     }
-
-    actions.stopCronometer();
   },
   addPontuation: async (points: number) => {
     dynamicData.value.checklist.pontuation += points;
@@ -851,7 +850,8 @@ const getStationData = () => {
     pageIndexes: dynamicData.value.pageIndexes,
     checklist: dynamicData.value.checklist,
     pdfFileName: dynamicData.value.pdf.fileName,
-    pdfFileUrl: dynamicData.value.pdf.fileUrl
+    pdfFileUrl: dynamicData.value.pdf.fileUrl,
+    cronometer: dynamicData.value.cronometer
   }
 }
 
@@ -861,6 +861,7 @@ const updateStationData = (data: any) => {
   dynamicData.value.checklist = data.checklist;
   dynamicData.value.pdf.fileName = data.pdfFileName;
   dynamicData.value.pdf.fileUrl = data.pdfFileUrl;
+  dynamicData.value.cronometer = data.cronometer;
 }
 
 
@@ -904,7 +905,21 @@ const sendStationData = (action: string|null = null) => {
   })
 }
 onMounted(() => {
-  
+  stationCronometer.value.interval = setInterval(() => {
+      if (dynamicData.value.cronometer.stopAt == null) {
+        return;
+      }
+      const stopAt = new Date(dynamicData.value.cronometer.stopAt as string);
+      const now = new Date();
+      const diff = stopAt.getTime() - now.getTime();
+      stationCronometer.value.time = Math.floor(diff / 1000);
+
+      //Check if the time is over:
+      if (diff <= 0) {
+        dynamicData.value.cronometer.stopAt = null;
+        actions.finishStation();
+      }
+  }, 1000);
 })
 
 
@@ -963,6 +978,7 @@ const wsEvents = {
 }
 onUnmounted(() => {
   ws.close();
+  clearInterval(stationCronometer.value.interval);
 })
 </script>
 
