@@ -640,6 +640,12 @@ const actions = {
       dynamicData.value.pageIndexes.allowedPressings.push(index);
     }
     sendStationData('allow-pressing');
+
+    toastController.create({
+      message: '📤 Impresso enviado ao médico',
+      duration: 1000
+    }).then(toast => toast.present());
+
   },
   onDoctorArrived: async () => {
     if (dynamicData.value.role == 'doctor') {
