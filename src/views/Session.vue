@@ -794,8 +794,8 @@ const clickOnChecklistPage = (ev: MouseEvent, index: number) => {
     return;
   }
   const page = dynamicData.value.checklist.pages[index];
-  const x = ev.offsetX - (32/2);
-  const y = ev.offsetY - (32/2);
+  const x = ev.offsetX - (40/2) - 2;
+  const y = ev.offsetY - (40/2) + 2;
   page.points.push({x, y});
 
   sendStationData('checklist-mark');
