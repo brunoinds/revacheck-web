@@ -13,6 +13,11 @@
             Terminar estação
           </ion-button>
 
+          <ion-button @click="reconectSocket" color="danger">
+            <ion-icon slot="end" :icon="reloadOutline"></ion-icon>
+            Reconect socket
+          </ion-button>
+
           <ion-button @click="actions.goToNewStation" color="success" v-if="dynamicData.stage == 'finished-station'">
             <ion-icon slot="end" :icon="reloadOutline"></ion-icon>
             Nova estação
@@ -284,7 +289,8 @@ import { websocketUrl } from '@/utils/Api';
 import { Dialog } from '@/utils/Dialog';
 import Explorer from '@/views/Explorer.vue';
 import axios from 'axios';
-import { xor } from 'lodash';
+import {Sha256} from '@aws-crypto/sha256-js';
+
 
 const route = useRoute();
 const router = useRouter();
@@ -468,7 +474,7 @@ const actions = {
 
 
 
-      if (dynamicData.value.role == 'doctor'){
+      if (dynamicData.value.role == 'doctor' || (dynamicData.value.role == 'actor' && dynamicData.value.stage != 'prepare-station')){
         const pagesToBeIncluded = [
           ...dynamicData.value.pageIndexes.actorIndications,
           ...dynamicData.value.pageIndexes.doctorIndications,
@@ -487,7 +493,7 @@ const actions = {
 
     const openOnlinePdfPicker = async () => {
       let result;
-      if (dynamicData.value.role == 'actor') {
+      if (dynamicData.value.role == 'actor' && dynamicData.value.stage == 'prepare-station') {
         const response = await (async () => {
           return new Promise((resolve, reject) => {
             Dialog.show(Explorer, {
@@ -588,7 +594,7 @@ const actions = {
       const sourcePDF = url;
       dynamicData.value.pdf.blobUri = sourcePDF
 
-      if (dynamicData.value.role == 'doctor'){
+      if (dynamicData.value.role == 'doctor' || (dynamicData.value.role == 'actor' && dynamicData.value.stage != 'prepare-station')){
         const pagesToBeIncluded = [
           ...dynamicData.value.pageIndexes.actorIndications,
           ...dynamicData.value.pageIndexes.doctorIndications,
@@ -638,13 +644,12 @@ const actions = {
     if (!dynamicData.value.pageIndexes.allowedPressings.includes(index)) {
       dynamicData.value.pageIndexes.allowedPressings.push(index);
     }
-    sendStationData('allow-pressing');
-
-    toastController.create({
-      message: '📤 Impresso enviado ao médico',
-      duration: 1000
-    }).then(toast => toast.present());
-
+    sendStationData('allow-pressing', () => {
+      toastController.create({
+        message: '📤 Impresso enviado ao médico',
+        duration: 1000
+      }).then(toast => toast.present());
+    });
   },
   onDoctorArrived: async () => {
     if (dynamicData.value.role == 'doctor') {
@@ -660,6 +665,15 @@ const actions = {
 
     if (dynamicData.value.role == 'actor'){
       actions.startCronometer();
+      sendWS({
+        type: 'public-on-station-start',
+        data: getStationData()
+      });
+      sendStationData();
+    }
+  },
+  resumeStation: async () => {
+    if (dynamicData.value.role == 'actor'){
       sendWS({
         type: 'public-on-station-start',
         data: getStationData()
@@ -777,7 +791,7 @@ const startStation = async () => {
       }
     })
 
-    storage.save();
+  await storage.save();
 }
 
 const clickOnChecklistPage = (ev: MouseEvent, index: number) => {
@@ -870,44 +884,91 @@ const updateStationData = (data: any) => {
 }
 
 
+const userIntendedCloseWsConnection = ref<boolean>(false);
+let ws:null|WebSocket = null;
 
-const ws = new WebSocket(websocketUrl);
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    type: 'register',
-    id: dynamicData.value.connectionId
-  }))
-};
-ws.onmessage = async (response) => {
-  //Check if response.data is a string or a Blob, if it is a Blob, convert it to a string:
-  let data = null;
-  if (response.data instanceof Blob) {
-    const buffer = await response.data.arrayBuffer();
-    data = new TextDecoder().decode(buffer);
-  }else{
-    data = response.data;
-  }
+const connectToWebSocket = () => {
+  ws = new WebSocket(websocketUrl);
+  ws.onopen = () => {
+    ws?.send(JSON.stringify({
+      type: 'register',
+      id: dynamicData.value.connectionId
+    }))
+  };
+  ws.onmessage = async (response) => {
+    //Check if response.data is a string or a Blob, if it is a Blob, convert it to a string:
+    let data = null;
+    if (response.data instanceof Blob) {
+      const buffer = await response.data.arrayBuffer();
+      data = new TextDecoder().decode(buffer);
+    }else{
+      data = response.data;
+    }
 
-  const event = JSON.parse(data) as any;
-  if (event.type in wsEvents) {
-    (wsEvents as any)[event.type](event);
-  }
-};
+    const event = JSON.parse(data) as any;
+    if (event.type in wsEvents) {
+      console.log('Received event:', event);
 
-ws.onclose = () => {
-};
+      if (event.connectionId && event.connectionId != dynamicData.value.connectionId) {
+        return;
+      }
+      (wsEvents as any)[event.type](event);
+    }
+  };
+
+  ws.onclose = () => {
+    if (userIntendedCloseWsConnection.value){
+      return;
+    }
+    console.log('Connection lost');
+    console.log('Trying to reconnect...');
+    setTimeout(() => {
+      connectToWebSocket();
+    }, 1000);
+  };
+}
+
+connectToWebSocket();
+
+const reconectSocket = () => {
+  ws?.close();
+}
 
 const sendWS = (data: any) => {
-  ws.send(JSON.stringify(data));
+  const dataInfo = JSON.parse(JSON.stringify(data));
+
+  dataInfo.connectionId = dynamicData.value.connectionId;
+
+  console.log('Sending:', dataInfo);
+  ws?.send(JSON.stringify(dataInfo));
 }
-const sendStationData = (action: string|null = null) => {
+
+let sendStationDataCallbacks:Array<{
+  hash: string,
+  callback: Function
+}> = [];
+
+const sendStationData = async (action: string|null = null, onReceived: Function|null = null) => {
+  const stationData = getStationData();
+  const hash = new Sha256();
+  hash.update(JSON.stringify(getStationData()));
+  const result = await hash.digest();
+
+
   sendWS({
     type: 'public-on-station-data',
     data: {
-      ...getStationData(),
-      action: action
+      ...stationData,
+      action: action,
+      hash: result.toString()
     }
   })
+  if (onReceived) {
+    sendStationDataCallbacks.push({
+      hash: result.toString(),
+      callback: onReceived
+    });
+  }
 }
 onMounted(() => {
   stationCronometer.value.interval = setInterval(() => {
@@ -928,14 +989,27 @@ onMounted(() => {
 })
 
 
+let hasReceivedOnStationDataBefore:boolean = false;
+
 const wsEvents = {
   'new-connection': () => {
+    if (dynamicData.value.role == 'actor') {
+    }
+    console.log('New connection');
     sendStationData();
   },
   'public-on-doctor-ready': (event: any) => {
-    if (dynamicData.value.role == 'actor') {
+    if (dynamicData.value.role == 'actor' && dynamicData.value.stage == 'waiting-doctor') {
       dynamicData.value.stage = 'waiting-start';
       dynamicData.value.tab = 'indications';
+    }
+
+    if (dynamicData.value.role == 'actor' && dynamicData.value.stage == 'ongoing-station') {
+      actions.resumeStation();
+    }
+
+    if (dynamicData.value.role == 'actor' && dynamicData.value.stage == 'finished-station') {
+      actions.resumeStation();
     }
   },
   'public-on-station-start': (event: any) => {
@@ -954,8 +1028,23 @@ const wsEvents = {
       }).then(alert => alert.present());
     }
   },
-  'public-on-station-data': (event: any) => {
+  'public-on-station-data-received': (event: any) => {
+    const callback = sendStationDataCallbacks.find((callback) => {
+      return callback.hash == event.data.hash;
+    });
+
+    if (callback) {
+      callback.callback();
+    }
+
+    //Remove the callback from the list:
+    sendStationDataCallbacks = sendStationDataCallbacks.filter((callback) => {
+      return callback.hash != event.data.hash;
+    });
+  },
+  'public-on-station-data': async (event: any) => {
     if (dynamicData.value.role == 'doctor'){
+        console.log('Received publiconstationdata:', event.data);
         if (event.data.from == 'actor' && event.data.stage == 'waiting-doctor') {
           updateStationData(event.data);
           actions.onDoctorArrived();
@@ -974,15 +1063,69 @@ const wsEvents = {
         }
       }
 
+      if (!hasReceivedOnStationDataBefore){
+        if (event.data.stage == 'ongoing-station'){
+          updateStationData(event.data);
+          await actions.choosePdf();
+        }
+        if (event.data.stage == 'waiting-start'){
+          updateStationData(event.data);
+          await actions.choosePdf();
+        }
+        if (event.data.stage == 'finished-station'){
+          updateStationData(event.data);
+          await actions.choosePdf();
+        }
+      }
+
       if (event.data.from == 'actor' && (event.data.stage == 'finished-station')) {
         updateStationData(event.data);
       }
     }
+
+    if (dynamicData.value.role == 'actor' && event.data.from == 'doctor'){
+      if (!hasReceivedOnStationDataBefore){
+        if (event.data.stage == 'ongoing-station'){
+          updateStationData(event.data);
+          await actions.choosePdf();
+          updateStationData(event.data);
+          dynamicData.value.tab = 'indications';
+        }
+        if (event.data.stage == 'waiting-start'){
+          updateStationData(event.data);
+          await actions.choosePdf();
+          updateStationData(event.data);
+          dynamicData.value.stage = 'waiting-start';
+          dynamicData.value.tab = 'indications';
+        }
+        if (event.data.stage == 'finished-station'){
+          updateStationData(event.data);
+          await actions.choosePdf();
+          updateStationData(event.data);
+          dynamicData.value.tab = 'checklist';
+        }
+      }
+    }
     
+    if (!hasReceivedOnStationDataBefore){
+      hasReceivedOnStationDataBefore = true;
+    }
+
+
+    if (dynamicData.value.role != event.data.from){
+      sendWS({
+        type: 'public-on-station-data-received',
+        data: {
+          hash: event.data.hash
+        }
+      })
+    }
+
   }
 }
 onUnmounted(() => {
-  ws.close();
+  userIntendedCloseWsConnection.value = true;
+  ws?.close();
   clearInterval(stationCronometer.value.interval);
 })
 </script>
