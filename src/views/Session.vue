@@ -13,11 +13,6 @@
             Terminar estação
           </ion-button>
 
-          <ion-button @click="reconectSocket" color="danger">
-            <ion-icon slot="end" :icon="reloadOutline"></ion-icon>
-            Reconect socket
-          </ion-button>
-
           <ion-button @click="actions.goToNewStation" color="success" v-if="dynamicData.stage == 'finished-station'">
             <ion-icon slot="end" :icon="reloadOutline"></ion-icon>
             Nova estação
@@ -930,9 +925,6 @@ const connectToWebSocket = () => {
 
 connectToWebSocket();
 
-const reconectSocket = () => {
-  ws?.close();
-}
 
 const sendWS = (data: any) => {
   const dataInfo = JSON.parse(JSON.stringify(data));
