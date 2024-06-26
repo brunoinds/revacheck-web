@@ -351,9 +351,9 @@ const dynamicData = ref<{
   },
   role: role,
   texts: {
-    actorIndications: '2,3,4',
+    actorIndications: '2',
     doctorIndications: '1',
-    pressings: '8,9,10',
+    pressings: '3-4',
     checklist: '5,6',
   },
   checklist: {
@@ -479,6 +479,7 @@ const actions = {
         const pagesToBeIncludedUnique = Array.from(new Set(pagesToBeIncluded));
         const pdf = await PDFModifier.loadPDF(dynamicData.value.pdf.blobUri);
         const imagesBase64 = await pdf.extractPagesAsImagesAsBase64(pagesToBeIncludedUnique);
+        
         dynamicData.value.pdf.pagesAsImages = imagesBase64;
       }
 
@@ -528,7 +529,7 @@ const actions = {
 
 
       let fetchedOnline;
-      let url;
+      let url:any;
 
       if (storedFile){
         fetchedOnline = await fetch(storedFile.base64Url);
@@ -550,7 +551,7 @@ const actions = {
 
         const blob = new Blob([response.data], {type: 'application/pdf'});
 
-        url = URL.createObjectURL(blob as Blob)
+        url = URL.createObjectURL(blob as Blob);
       }
 
       loadingPdfFileOnline.value = null;
@@ -581,6 +582,29 @@ const actions = {
           dynamicData.value.texts.doctorIndications = fileOnStorage.pageIndexesTexts.doctorIndications;
           dynamicData.value.texts.pressings = fileOnStorage.pageIndexesTexts.pressings;
           dynamicData.value.texts.checklist = fileOnStorage.pageIndexesTexts.checklist;
+        }else{
+          const loadPdfTextings = async () => {
+            const pdf = await PDFModifier.loadPDF(url);
+            const texts = await pdf.extractAllPagesAsText();
+            
+            texts.forEach((item, i) => {
+              if (item.includes('Padrão Esperado de Procedimento  Estação:')){
+                dynamicData.value.texts.checklist = `${(i+1)}-${texts.length}`;
+                if ((i) == 3){
+                  dynamicData.value.texts.pressings = `3`;
+                }else if ((i+1) > 3){
+                  dynamicData.value.texts.pressings = `3-${(i)}`;
+                }else{
+                  dynamicData.value.texts.pressings = ``;
+                }
+              }
+            })
+          }
+          try {
+            loadPdfTextings();
+          } catch (error) {
+            console.error(error);
+          }
         }
       }
       
@@ -842,6 +866,32 @@ class PDFModifier{
             listImagesBase64.push(imageData);
         }
         return listImagesBase64;
+    }
+
+    public async extractPagesAsText(pagesIndices: number[] = []){
+        let listTexts: string[] = [];
+        for (let i = 0; i < this.pdf.numPages; i++) {
+            if (pagesIndices.length > 0 && !pagesIndices.includes(i)) {
+              listTexts.push('null');
+              continue;
+            }
+            const page = await this.pdf.getPage(i+1);
+            const textContent = await page.getTextContent();
+            const text = textContent.items.map((item) => item.str).join(' ');
+            listTexts.push(text);
+        }
+        return listTexts;
+    }
+
+    public async extractAllPagesAsText(){
+        let listTexts: string[] = [];
+        for (let i = 0; i < this.pdf.numPages; i++) {
+            const page = await this.pdf.getPage(i+1);
+            const textContent = await page.getTextContent();
+            const text = textContent.items.map((item) => item.str).join(' ');
+            listTexts.push(text);
+        }
+        return listTexts;
     }
 
     public static async loadPDF(source: any): Promise<PDFModifier>{
